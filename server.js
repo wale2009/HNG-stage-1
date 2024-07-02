@@ -1,60 +1,52 @@
-const express = require('express');
-const requestIp = require('request-ip');
-const geoipLite = require('geoip-lite');
-const fetch = require('node-fetch');
+const express = require("express");
+const requestIp = require("request-ip");
+const fetch = require("node-fetch");
+const axios = require("axios");
 
 const app = express();
 app.use(requestIp.mw());
 
-app.get('/api/hello', async (req, res) => {
+
+app.get("/", (req, res) => res.send("Express app dey work"));
+
+app.get("/api/hello", async (req, res) => {
   try {
-    const visitorName = req.query.visitor_name || 'Guest';
-    const clientIp = req.clientIp;
-    console.log('Client IP:', clientIp); 
+    const visitorName = req.query.visitor_name || "Guest";
+    const getIp = req.headers["x-forwarded-for"];
+    const clientIp = getIp ? getIp.split(/, /)[0] : req.socket.remoteAddress
+    console.log("Client IP:", clientIp);
 
-    const geo = geoipLite.lookup(clientIp);
-    console.log('GeoIP Lookup Result:', geo); 
+    const { data } = await axios.get(`http://ip-api.com/json/${clientIp}`);
 
-    let location = 'Unknown';
-    if (geo && geo.city) {
-      location = geo.city;
-    } else {
-      
-      location = 'New York';
-    }
+    console.log(data);
+  
+    const weatherApiKey = "47d0a505327d690ea418623e655afa86";
+    const weatherApiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${data.city}&appid=${weatherApiKey}&units=metric`;
 
-    const weatherApiKey = '47d0a505327d690ea418623e655afa86'; 
-    const weatherApiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${location}&appid=${weatherApiKey}&units=metric`;
+    console.log("Fetching weather data from:", weatherApiUrl);
 
-    console.log('Fetching weather data from:', weatherApiUrl);
+    const { data:weatherData} = await axios.get(weatherApiUrl);
 
-    const weatherResponse = await fetch(weatherApiUrl);
-    const weatherData = await weatherResponse.json();
-
-    if (!weatherResponse.ok) {
-      console.error('Weather API request failed:', weatherData);
-      return res.status(500).json({ error: 'Weather API request failed' });
-    }
-
+    console.log(weatherData)
     const temperature = weatherData.main.temp;
 
     const response = {
       client_ip: clientIp,
-      location: location,
-      greeting: `Hello, ${visitorName}!, the temperature is ${temperature} degrees Celsius in ${location}`
+      location: data.city,
+      greeting: `Hello, ${visitorName}!, the temperature is ${temperature} degrees Celsius in ${data.city}`,
     };
 
     res.json(response);
   } catch (error) {
-    console.error('Error:', error.message);
-    res.status(500).json({ error: 'Internal Server Error' });
+    console.error("Error:", error.message);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-const port = process.env.PORT || 3000;
+const port = 4000;
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
 
 
-
+module.exports = app
